@@ -3,15 +3,17 @@ from typing import TYPE_CHECKING, Optional
 
 
 from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncResult, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlmodel import SQLModel, Field, Relationship
+
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import SQLModel, Field, Relationship, select
 
 # PostgreSQL connection URL
 DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost/sqlmodel_tutor"
 
 # Create the async engine
-async_engine = create_async_engine(
+async_engine: AsyncEngine = create_async_engine(
     DATABASE_URL,
     future=True,
     echo=True,
@@ -88,8 +90,14 @@ async def create_item(item: Item, session: AsyncSession = Depends(get_session)):
     await session.refresh(item)
     return item
 
+@app.get('/users')
+async def get_users(session: AsyncSession = Depends(get_session)):
+    results: AsyncResult = await session.exec(select(User))
+    users = results.all()
+    return users
+
 @app.post("/users/")
-async def create_item(user: User, session: AsyncSession = Depends(get_session)):
+async def create_user(user: User, session: AsyncSession = Depends(get_session)):
     session.add(user)
     await session.commit()
     await session.refresh(user)
