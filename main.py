@@ -1,13 +1,16 @@
 from argparse import ArgumentParser
 from typing import TYPE_CHECKING, Optional
+from pydantic import BaseModel
+import datetime
 
 
 from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import declarative_mixin
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncResult, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import SQLModel, Field, Relationship, select
+from sqlmodel import SQLModel, TIMESTAMP, Column, Field, Relationship, select
 
 # PostgreSQL connection URL
 DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost/sqlmodel_tutor"
@@ -30,8 +33,31 @@ async def get_session():
         yield session
 
 
+def get_utc_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+@declarative_mixin
+class IDMixin(BaseModel):
+    id: Optional[int] = Field(default=None, primary_key=True, nullable=False)
+
+
+@declarative_mixin
+class CreatedAtFieldsMixin(BaseModel):
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.utcnow,
+        nullable=False
+    )
+
+
+@declarative_mixin
+class UpdatedAtFieldsMixin(BaseModel):
+    updated_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.utcnow,
+        nullable=False,
+        sa_column_kwargs={"onupdate": datetime.datetime.utcnow},
+    )
 # Many to one
-class Item(SQLModel, table=True):
+class Item(SQLModel, IDMixin, CreatedAtFieldsMixin, UpdatedAtFieldsMixin, table=True):
     __tablename__ = 'items'
 
     id: int | None = Field(default=None, primary_key=True)
@@ -49,7 +75,7 @@ class UserStockLink(SQLModel, table=True):
     stock_id: int | None = Field(default=None, foreign_key='stocks.id', primary_key=True)
 
 
-class User(SQLModel, table=True):
+class User(SQLModel, IDMixin, CreatedAtFieldsMixin, UpdatedAtFieldsMixin, table=True):
     __tablename__ = 'users'
 
     id: int | None = Field(default=None, primary_key=True)
@@ -62,7 +88,7 @@ class User(SQLModel, table=True):
     stocks: list['Stock'] = Relationship(back_populates='users', link_model=UserStockLink)
 
 
-class Stock(SQLModel, table=True):
+class Stock(SQLModel, IDMixin, CreatedAtFieldsMixin, UpdatedAtFieldsMixin, table=True):
     __tablename__ = 'stocks'
 
     id: int | None = Field(default=None, primary_key=True)
@@ -93,6 +119,18 @@ async def create_item(item: Item, session: AsyncSession = Depends(get_session)):
 @app.get('/users')
 async def get_users(session: AsyncSession = Depends(get_session)):
     results: AsyncResult = await session.exec(select(User))
+    users = results.all()
+    return users
+
+@app.get('/two_users/{id_1}/{id_2}')
+async def get_users(id_1: int, id_2: int, session: AsyncSession = Depends(get_session)):
+    # use `in` and `order desc`
+    # results: AsyncResult = await session.exec(
+    #     select(User).where(User.id.in_([id_1, id_2])).order_by(User.id.desc())
+    # )
+    results: AsyncResult = await session.exec(
+        select(User).where((User.id == id_1) | (User.id == id_2)).order_by(User.id.desc())
+    )
     users = results.all()
     return users
 
