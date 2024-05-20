@@ -8,6 +8,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import declarative_mixin
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncResult, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy_mixins import TimestampsMixin
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import SQLModel, TIMESTAMP, Column, Field, Relationship, select
@@ -38,7 +39,7 @@ def get_utc_now() -> datetime.datetime:
 
 @declarative_mixin
 class IDMixin(BaseModel):
-    id: Optional[int] = Field(default=None, primary_key=True, nullable=False)
+    id: int | None = Field(default=None, primary_key=True, nullable=False)
 
 
 @declarative_mixin
@@ -57,10 +58,9 @@ class UpdatedAtFieldsMixin(BaseModel):
         sa_column_kwargs={"onupdate": datetime.datetime.utcnow},
     )
 # Many to one
-class Item(SQLModel, IDMixin, CreatedAtFieldsMixin, UpdatedAtFieldsMixin, table=True):
+class Item(SQLModel, IDMixin, TimestampsMixin, table=True):
     __tablename__ = 'items'
 
-    id: int | None = Field(default=None, primary_key=True)
     title: str = Field(index=True)
     description: str = Field(index=True)
     owner_id: int | None = Field(default=None, foreign_key='users.id', nullable=False)
@@ -75,10 +75,9 @@ class UserStockLink(SQLModel, table=True):
     stock_id: int | None = Field(default=None, foreign_key='stocks.id', primary_key=True)
 
 
-class User(SQLModel, IDMixin, CreatedAtFieldsMixin, UpdatedAtFieldsMixin, table=True):
+class User(SQLModel, IDMixin, TimestampsMixin, table=True):
     __tablename__ = 'users'
 
-    id: int | None = Field(default=None, primary_key=True)
     email: str = Field(index=True, unique=True)
     age: int | None = Field(default=None)
     hashed_password: str
@@ -88,10 +87,9 @@ class User(SQLModel, IDMixin, CreatedAtFieldsMixin, UpdatedAtFieldsMixin, table=
     stocks: list['Stock'] = Relationship(back_populates='users', link_model=UserStockLink)
 
 
-class Stock(SQLModel, IDMixin, CreatedAtFieldsMixin, UpdatedAtFieldsMixin, table=True):
+class Stock(SQLModel, IDMixin, TimestampsMixin, table=True):
     __tablename__ = 'stocks'
 
-    id: int | None = Field(default=None, primary_key=True)
     stock_id: str = Field(index=True, unique=True)
     name: str = Field(index=True, unique=True)
 
